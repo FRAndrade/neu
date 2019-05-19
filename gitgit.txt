@@ -1,0 +1,9 @@
+Git e Github
+
+ - Gerência de configuração de software ( O que mudou/ por que/ quem fez)
+	- Identificação ( Os componentes)
+	- Documentação
+	- Controle
+	- Autitar
+
+  - Controle de versão 
