@@ -7,3 +7,20 @@ Git e Github
 	- Autitar
 
   - Controle de versão 
+
+Comandos 
+
+git add <lista de arquivos>
+
+ - Adiciona os arquivos novos e novos e modificados para o próximo commit
+	git add . 
+
+git commit [-m "Message]
+
+	- Registra o commit com tosdos os arquicos que usou "git add"
+
+git status
+git log 
+gi add
+git commit 
+git push
