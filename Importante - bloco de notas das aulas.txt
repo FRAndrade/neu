@@ -24,6 +24,7 @@ git log
 gi add
 git commit 
 git push
+git clone <URL>
 
 Comandos importantes no terminal:
 	
