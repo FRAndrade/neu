@@ -24,7 +24,11 @@ git log
 gi add
 git commit 
 git push
+git diff <commit1> <commit2> (compara as alterações dos commit's)
+git reset <commit> (Resetar o repositório para um determinado commit)
 git clone <URL>
+git checkout <commit> (volta para versões anteriores)
+git checkout -- . (Desfaz todas as alterações antes do ultímo commit)
 
 Comandos importantes no terminal:
 	
