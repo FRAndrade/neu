@@ -24,3 +24,8 @@ git log
 gi add
 git commit 
 git push
+
+Comandos importantes no terminal:
+	
+	- mkdir - Cria um diretório 
+	- touch - cria um arquivo (txt; .c.; .py ...)
