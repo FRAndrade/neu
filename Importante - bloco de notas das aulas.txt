@@ -25,6 +25,7 @@ gi add
 git commit 
 git push
 git clone <URL>
+git ney
 
 Comandos importantes no terminal:
 	
