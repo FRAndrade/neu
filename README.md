@@ -1,5 +1,5 @@
 # Neu repo
-### Imagem do gatinho meramente ilustrativa (Achei bonitinho)
-![imagem](/gato.jpg)
+### Imagem do dog meramente ilustrativa (dog > gato)
+![imagem](/dog.jpg)
 
 Esse é um repositório apenas para exemplo para aprender os comandos do git
