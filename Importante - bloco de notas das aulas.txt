@@ -30,6 +30,11 @@ git clone <URL>
 git checkout <commit> (volta para versões anteriores)
 git checkout -- . (Desfaz todas as alterações antes do ultímo commit)
 
+git branch
+git branch <nova_branch>
+git branch -d <branch> - deleta uma branch
+git checkout <branch> - muda de branch
+git merge <branch> - aplica commit's de uma branch em uma branch atual
 Comandos importantes no terminal:
 	
 	- mkdir - Cria um diretório 
