@@ -27,12 +27,8 @@ git push
 git diff <commit1> <commit2> (compara as alterações dos commit's)
 git reset <commit> (Resetar o repositório para um determinado commit)
 git clone <URL>
-<<<<<<< HEAD
-git ney
-=======
 git checkout <commit> (volta para versões anteriores)
 git checkout -- . (Desfaz todas as alterações antes do ultímo commit)
->>>>>>> d638b174757cfee2b8bb43e5a58c273ada57264f
 
 git branch
 git branch <nova_branch>
@@ -43,3 +39,5 @@ Comandos importantes no terminal:
 	
 	- mkdir - Cria um diretório 
 	- touch - cria um arquivo (txt; .c.; .py ...)
+
+Conflitos Infinitos
