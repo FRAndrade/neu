@@ -35,6 +35,7 @@ git branch <nova_branch>
 git branch -d <branch> - deleta uma branch
 git checkout <branch> - muda de branch
 git merge <branch> - aplica commit's de uma branch em uma branch atual
+git rebase <branch> - aplica commit's de uma branch antes dos commit'a da branch atual 
 Comandos importantes no terminal:
 	
 	- mkdir - Cria um diretório 
