@@ -1,4 +1,4 @@
-// Author: MyName
+﻿// Author: MyName
 // Copyright:   Copyright 2017 Keysight Technologies
 //              You have a royalty-free right to use, modify, reproduce and distribute
 //              the sample application files (and/or any modified version) in any way
@@ -10,9 +10,8 @@ using System.Linq;
 using System.Text;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
-using System.Windows.Forms;
 
-using OpenTap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
+using Keysight.Tap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
 using PcapDotNet.Base;
 using PcapDotNet.Core;
 using PcapDotNet.Packets;
@@ -28,7 +27,7 @@ using PcapDotNet.Packets.IpV6;
 using PcapDotNet.Packets.Transport;
 using System.Threading;
 
-namespace Tap.Plugins.Anatel_IPv6_Test_update
+namespace Tap.Plugins.Anatel_IPv6_Test
 {
     public enum NEXT_HEADER_ZERO_VALIDATE_REPLY
     {
@@ -38,7 +37,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
         NO_REPLY
     }
 
-    [Display("V6LC.1.2.1 Next Header Zero", Group: "Anatel_IPv6_Test_update", Description: "Insert description here")]
+    [Display("V6LC.1.2.1 Next Header Zero", Group: "Anatel_IPv6_Test", Description: "Insert description here")]
     public class V6LC_1_2_1_NextHeaderZero : V6LC_BaseTest
     {
         #region Settings
@@ -80,9 +79,9 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
         {
             CommonTestInit();
 
-            Verdict PingRequestReceivedStatus = Verdict.NotSet;
-            Verdict PingReplyReceivedStatus = Verdict.NotSet;
-            Verdict ParameterProblemStatus = Verdict.NotSet;
+            Verdict PingRequestReceivedStatus = Keysight.Tap.Verdict.NotSet;
+            Verdict PingReplyReceivedStatus = Keysight.Tap.Verdict.NotSet;
+            Verdict ParameterProblemStatus = Keysight.Tap.Verdict.NotSet;
 
             // Retrieve the device list from the local machine
             IList<LivePacketDevice> allDevices = LivePacketDevice.AllLocalMachine;
@@ -127,7 +126,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                 // Start Packet Capture
                 PcapCapturePackets packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName);
                 // Make sure Packet Capture has started before sending ping request
-                TapThread.Sleep(1000);
+                Thread.Sleep(1000);
 
                 // Ping request
                 communicator.SendPacket(NewBuildIpV6PacketGroup2NextHeaderZero(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcdefghijklmnopqrstuvwabcdefghi", IpV4Protocol.IpV6HopByHopOption));
@@ -138,7 +137,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                 do
                 {
                     // Wait until we have received echo and reply
-                    TapThread.Sleep(1000);
+                    Thread.Sleep(1000);
                 } while (nRetry++ < 10);
 
                 // Validate Received echo
@@ -169,7 +168,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                 {
                     case NEXT_HEADER_ZERO_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER:
                         // if last packet is unrecognized next header
-                        if ((PingRequestReceivedStatus == Verdict.Pass) &&
+                        if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
                             (nPacketCount > 1))
                         {
                             nPingReplyReceivedStatus = ValidateParameterProblemReceived(nPacketCount, lastPacketParameterProblem);
@@ -180,7 +179,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                             ParameterProblemStatus = EvaluateResult(this.Name + "_ParameterProblemStatus_Received", 0, 1, nPingReplyReceivedStatus);
 
                             // Set Ping reply status to pass
-                            PingReplyReceivedStatus = Verdict.Pass;
+                            PingReplyReceivedStatus = Keysight.Tap.Verdict.Pass;
                         }
                         else
                         {
@@ -191,13 +190,13 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                                 new IConvertible[] { this.Name + "_ParameterProblemStatus_Received", 0, 1, nPingReplyReceivedStatus });
                             ParameterProblemStatus = EvaluateResult(this.Name + "_ParameterProblemStatus_Received", 0, 1, nPingReplyReceivedStatus);
 
-                            PingReplyReceivedStatus = Verdict.Fail;
-                            ParameterProblemStatus = Verdict.Fail;
+                            PingReplyReceivedStatus = Keysight.Tap.Verdict.Fail;
+                            ParameterProblemStatus = Keysight.Tap.Verdict.Fail;
                         }
                         break;
                     case NEXT_HEADER_ZERO_VALIDATE_REPLY.PING_REPLY:
                         // if last packet is ping reply
-                        if ((PingRequestReceivedStatus ==  Verdict.Pass) &&
+                        if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
                             (nPacketCount > 1))
                         {
                             nPingReplyReceivedStatus = ValidatePingReplyReceived(nPacketCount, lastPacket);
@@ -208,7 +207,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                             PingReplyReceivedStatus = EvaluateResult(this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus);
 
                             // Set Ping reply status to pass
-                            ParameterProblemStatus =  Verdict.Pass;
+                            ParameterProblemStatus = Keysight.Tap.Verdict.Pass;
                         }
                         else
                         {
@@ -219,8 +218,8 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                                 new IConvertible[] { this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus });
                             PingReplyReceivedStatus = EvaluateResult(this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus);
 
-                            PingReplyReceivedStatus =  Verdict.Fail;
-                            ParameterProblemStatus =  Verdict.Fail;
+                            PingReplyReceivedStatus = Keysight.Tap.Verdict.Fail;
+                            ParameterProblemStatus = Keysight.Tap.Verdict.Fail;
                         }
                         break;
                     case NEXT_HEADER_ZERO_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER_AND_PING_REPLY:
@@ -228,13 +227,13 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                         {
                             // TODO
                             // Fail for now
-                            PingReplyReceivedStatus =  Verdict.Fail;
-                            ParameterProblemStatus =  Verdict.Fail;
+                            PingReplyReceivedStatus = Keysight.Tap.Verdict.Fail;
+                            ParameterProblemStatus = Keysight.Tap.Verdict.Fail;
                         }
                         break;
                     case NEXT_HEADER_ZERO_VALIDATE_REPLY.NO_REPLY:
-                        if ((PingRequestReceivedStatus ==  Verdict.Pass) &&
-                            (nPacketCount <= 1))
+                        if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) && 
+                            (nPacketCount <=1))
                         {
                             nPingReplyReceivedStatus = 0;
                             // Publish Results
@@ -244,8 +243,8 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                             PingReplyReceivedStatus = EvaluateResult(this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus);
 
                             // Only Echo Ping Request has been received
-                            PingReplyReceivedStatus =  Verdict.Pass;
-                            ParameterProblemStatus =  Verdict.Pass;
+                            PingReplyReceivedStatus = Keysight.Tap.Verdict.Pass;
+                            ParameterProblemStatus = Keysight.Tap.Verdict.Pass;
                         }
                         else
                         {
@@ -257,8 +256,8 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                             PingReplyReceivedStatus = EvaluateResult(this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus);
 
                             // Ping request failed or more than one packet received
-                            PingReplyReceivedStatus =  Verdict.Fail;
-                            ParameterProblemStatus =  Verdict.Fail;
+                            PingReplyReceivedStatus = Keysight.Tap.Verdict.Fail;
+                            ParameterProblemStatus = Keysight.Tap.Verdict.Fail;
                         }
                         break;
                 }
@@ -268,9 +267,9 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
             }
 
             // Update verdict to pass only if PER and RSSI have passed
-            if ((PingRequestReceivedStatus ==  Verdict.Pass) &&
-                (PingReplyReceivedStatus ==  Verdict.Pass) &&
-                (ParameterProblemStatus ==  Verdict.Pass))
+            if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
+                (PingReplyReceivedStatus == Keysight.Tap.Verdict.Pass) &&
+                (ParameterProblemStatus == Keysight.Tap.Verdict.Pass))
             {
                 UpgradeVerdict(Verdict.Pass);
             }
