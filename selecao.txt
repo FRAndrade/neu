@@ -1,4 +1,4 @@
-﻿// Author: MyName
+// Author: MyName
 // Copyright:   Copyright 2017 Keysight Technologies
 //              You have a royalty-free right to use, modify, reproduce and distribute
 //              the sample application files (and/or any modified version) in any way
@@ -10,8 +10,9 @@ using System.Linq;
 using System.Text;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 
-using Keysight.Tap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
+using OpenTap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
 using PcapDotNet.Base;
 using PcapDotNet.Core;
 using PcapDotNet.Packets;
@@ -28,7 +29,8 @@ using PcapDotNet.Packets.IpV6;
 using PcapDotNet.Packets.Transport;
 using System.Threading;
 
-namespace Tap.Plugins.Anatel_IPv6_Test
+
+namespace Tap.Plugins.Anatel_IPv6_Test_update
 {
     public enum TRAFFIC_CLASS
     {
@@ -42,7 +44,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test
         MATCH_TRANSMITTED_VALUE = 1,
     }
 
-    [Display("V6LC.1.1.2 Traffic Class", Group: "Anatel_IPv6_Test", Description: "Insert description here")]
+    [Display("V6LC.1.1.2 Traffic Class", Group: "Anatel_IPv6_Test_update", Description: "Insert description here")]
     public class V6LC_1_1_2_TrafficClass : V6LC_BaseTest
     {
         #region Settings
@@ -73,7 +75,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test
 
             this.Rules.Add(() => (TrafficClassValue >= 0 && TrafficClassValue <= 255), "Range: 0 to 255", "TrafficClassValue");
 
-            SetTrafficClassValue(); 
+            SetTrafficClassValue();
             FormatStepName();
         }
 
@@ -81,9 +83,9 @@ namespace Tap.Plugins.Anatel_IPv6_Test
         {
             CommonTestInit();
 
-            Verdict PingRequestReceivedStatus = Keysight.Tap.Verdict.NotSet;
-            Verdict PingReplyReceivedStatus = Keysight.Tap.Verdict.NotSet;
-            Verdict trafficClassMatchStatus = Keysight.Tap.Verdict.NotSet;
+            Verdict PingRequestReceivedStatus =  Verdict.NotSet;
+            Verdict PingReplyReceivedStatus =  Verdict.NotSet;
+            Verdict trafficClassMatchStatus =  Verdict.NotSet;
 
             // Retrieve the device list from the local machine
             IList<LivePacketDevice> allDevices = LivePacketDevice.AllLocalMachine;
@@ -128,7 +130,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test
                 // Start Packet Capture
                 PcapCapturePackets packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_" + TrafficClass.ToString());
                 // Make sure Packet Capture has started before sending ping request
-                Thread.Sleep(1000);
+                TapThread.Sleep(1000);
 
                 // dump TX packet
                 Packet packetA = NewBuildIpV6Packet(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcdefghijklmnopqrstuvwabcdefghi", IpV4Protocol.InternetControlMessageProtocolForIpV6);
@@ -142,11 +144,13 @@ namespace Tap.Plugins.Anatel_IPv6_Test
                 do
                 {
                     // Wait until we have received echo and reply
-                    Thread.Sleep(100);
+                    TapThread.Sleep(100);
                 } while ((packetCapture.PacketCounter < 2) && (nRetry++ < 40));
 
                 // Validate Received echo
                 Console.WriteLine("Packets Received: " + packetCapture.PacketCounter);
+                Log.Warning("Numero de Packets esperados - 2");
+                Log.Warning("Packets Recebidos: " + packetCapture.PacketCounter);
 
                 // Terminate capture packets
                 Packet lastPacket = packetCapture.LastPacket;
@@ -219,9 +223,9 @@ namespace Tap.Plugins.Anatel_IPv6_Test
             }
 
             // Update verdict to pass only if PER and RSSI have passed
-            if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                (PingReplyReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                (trafficClassMatchStatus == Keysight.Tap.Verdict.Pass))
+            if ((PingRequestReceivedStatus ==  Verdict.Pass) &&
+                (PingReplyReceivedStatus ==  Verdict.Pass) &&
+                (trafficClassMatchStatus ==  Verdict.Pass))
             {
                 UpgradeVerdict(Verdict.Pass);
             }
