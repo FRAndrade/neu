@@ -1,4 +1,263 @@
-Alisson 
-Neymar 
-Coutinho
-David Neres
+﻿// Author: MyName
+// Copyright:   Copyright 2017 Keysight Technologies
+//              You have a royalty-free right to use, modify, reproduce and distribute
+//              the sample application files (and/or any modified version) in any way
+//              you find useful, provided that you agree that Keysight Technologies has no
+//              warranty, obligations or liability for any sample application files.
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.ComponentModel;
+using System.Text.RegularExpressions;
+
+using Keysight.Tap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
+using PcapDotNet.Base;
+using PcapDotNet.Core;
+using PcapDotNet.Packets;
+using PcapDotNet.Core.Extensions;
+using PcapDotNet.Packets.Arp;
+using PcapDotNet.Packets.Dns;
+using PcapDotNet.Packets.Ethernet;
+using PcapDotNet.Packets.Gre;
+using PcapDotNet.Packets.Http;
+using PcapDotNet.Packets.Icmp;
+using PcapDotNet.Packets.Igmp;
+using PcapDotNet.Packets.IpV4;
+using PcapDotNet.Packets.IpV6;
+using PcapDotNet.Packets.Transport;
+using System.Threading;
+
+namespace Tap.Plugins.Anatel_IPv6_Test
+{
+    public enum TRAFFIC_CLASS
+    {
+        ZERO = 0,
+        NON_ZERO = 1,
+    }
+
+    public enum TRAFFIC_CLASS_VALIDATE_REPLY
+    {
+        ZERO = 0,
+        MATCH_TRANSMITTED_VALUE = 1,
+    }
+
+    [Display("V6LC.1.1.2 Traffic Class", Group: "Anatel_IPv6_Test", Description: "Insert description here")]
+    public class V6LC_1_1_2_TrafficClass : V6LC_BaseTest
+    {
+        #region Settings
+        private TRAFFIC_CLASS _TrafficClass;
+        [Display(Name: "Traffic Class",
+            Description: "Traffic Class\n" +
+            "\n(Default: -1)",
+            Group: "Packet Setup", Order: 3.0, Collapsed: false)]
+        public TRAFFIC_CLASS TrafficClass { get { return _TrafficClass; } set { _TrafficClass = value; SetTrafficClassValue(); FormatStepName(); } }
+
+        [EnabledIf("TrafficClass", TRAFFIC_CLASS.NON_ZERO)]
+        [Display("Traffic Class value", Group: "Packet Setup", Order: 3.1, Description: "Select value for non zero traffic class")]
+        public byte TrafficClassValue { get; set; }
+
+        [Display("Validate Traffic Class value", Group: "Limits", Order: 4.3, Description: "Validate Traffic Class value to Zero or match the transmitted value")]
+        public TRAFFIC_CLASS_VALIDATE_REPLY TrafficClassCompare { get; set; }
+        #endregion
+
+        public V6LC_1_1_2_TrafficClass() : base()
+        {
+            // Show Validate options on GUI
+            showValidateEchoRequest = true;
+            showValidateEchoReply = true;
+
+            // Validate options for this test
+            validateEchoRequest = YesNo.Yes;
+            validateEchoReply = YesNo.Yes;
+
+            this.Rules.Add(() => (TrafficClassValue >= 0 && TrafficClassValue <= 255), "Range: 0 to 255", "TrafficClassValue");
+
+            SetTrafficClassValue(); 
+            FormatStepName();
+        }
+
+        public override void Run()
+        {
+            CommonTestInit();
+
+            Verdict PingRequestReceivedStatus = Keysight.Tap.Verdict.NotSet;
+            Verdict PingReplyReceivedStatus = Keysight.Tap.Verdict.NotSet;
+            Verdict trafficClassMatchStatus = Keysight.Tap.Verdict.NotSet;
+
+            // Retrieve the device list from the local machine
+            IList<LivePacketDevice> allDevices = LivePacketDevice.AllLocalMachine;
+
+            if (allDevices.Count == 0)
+            {
+                Log.Info("No interfaces found! Make sure WinPcap is installed.");
+                return;
+            }
+
+            // Print the list
+            for (int i = 0; i != allDevices.Count; ++i)
+            {
+                LivePacketDevice device = allDevices[i];
+                Log.Info((i + 1) + ". " + device.Name);
+                if (device.Description != null)
+                    Log.Info(" (" + device.Description + ")");
+                else
+                    Log.Info(" (No description available)");
+            }
+
+            // Interface Index
+            int deviceIndex = nicId;
+
+            // Take the selected adapter
+            PacketDevice selectedDevice = allDevices[deviceIndex - 1];
+
+            // Open the output device
+            using (PacketCommunicator communicator = selectedDevice.Open(100, // name of the device
+                                                                         PacketDeviceOpenAttributes.Promiscuous, // promiscuous mode
+                                                                         1000)) // read timeout
+            {
+                // Transmit Packet
+                uintSequenceNumber++;
+                byte bVer = (byte)Byte.Parse("6");
+                byte bTrafficClass = TrafficClassValue;
+                int nFlowLabel = (int)int.Parse("0");
+
+                String TapFolder = System.IO.Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath);
+                String startTime = PlanRun.StartTime.ToString("yyyy-MM-dd-HH-mm-ss-");
+                String logFileName = TapFolder + @"\Results\" + startTime + this.GetType().Name;
+                // Start Packet Capture
+                PcapCapturePackets packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_" + TrafficClass.ToString());
+                // Make sure Packet Capture has started before sending ping request
+                Thread.Sleep(1000);
+
+                // dump TX packet
+                Packet packetA = NewBuildIpV6Packet(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcdefghijklmnopqrstuvwabcdefghi", IpV4Protocol.InternetControlMessageProtocolForIpV6);
+
+                // Ping request
+                communicator.SendPacket(packetA);
+
+                // Wait
+                Log.Info("Run()->Sleep");
+                int nRetry = 0;
+                do
+                {
+                    // Wait until we have received echo and reply
+                    Thread.Sleep(100);
+                } while ((packetCapture.PacketCounter < 2) && (nRetry++ < 40));
+
+                // Validate Received echo
+                Console.WriteLine("Packets Received: " + packetCapture.PacketCounter);
+
+                // Terminate capture packets
+                Packet lastPacket = packetCapture.LastPacket;
+                int nPacketCount = packetCapture.PacketCounter;
+
+                // Validate Test Case
+                // Validate Echo reply was received
+                int nEchoReplyReceivedStatus = -1;
+                nEchoReplyReceivedStatus = ValidateEchoReceived(nPacketCount);
+
+                // Publish Results
+                Results.Publish("Main Results", new
+                    List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                    new IConvertible[] { this.Name + "_Ping_Request_Received", 0, 1, nEchoReplyReceivedStatus });
+                PingRequestReceivedStatus = EvaluateResult(this.Name + "_Ping_Request_Received", 0, 1, nEchoReplyReceivedStatus);
+
+                // Validate Echo Reply was received
+                int nPingReplyReceivedStatus = ValidatePingReplyReceived(nPacketCount, lastPacket);
+                // Publish Results
+                Results.Publish("Main Results", new
+                    List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                    new IConvertible[] { this.Name + "_Ping_Reply_Received", 0, 1, nPingReplyReceivedStatus });
+                PingReplyReceivedStatus = EvaluateResult(this.Name + "_Ping_Reply_Received", 0, 1, nPingReplyReceivedStatus);
+
+                int nTrafficClassMatchStatus = -1;
+                if (nPingReplyReceivedStatus == 0)
+                {
+                    // validate Traffic Class
+                    PcapParsePacket lastPacketParsed = new PcapParsePacket(lastPacket);
+                    byte ReceivedTrafficClass = lastPacketParsed.GetIPv6TrafficClass();
+
+                    switch (TrafficClassCompare)
+                    {
+                        case TRAFFIC_CLASS_VALIDATE_REPLY.MATCH_TRANSMITTED_VALUE:
+                            // Case to match received traffic class equal to transmitted traffic class
+                            if (ReceivedTrafficClass == TrafficClassValue)
+                            {
+                                // Received Traffic Class matches Transmitted Traffic Class!
+                                // PASS
+                                nTrafficClassMatchStatus = 0;
+                            }
+                            else
+                            {
+                                nTrafficClassMatchStatus = -2;
+                            }
+                            break;
+                        case TRAFFIC_CLASS_VALIDATE_REPLY.ZERO:
+                            // Case to match received traffic class to zero
+                            if (ReceivedTrafficClass == 0)
+                            {
+                                // Received Traffic Class matches Transmitted Traffic Class!
+                                // PASS
+                                nTrafficClassMatchStatus = 0;
+                            }
+                            else
+                            {
+                                nTrafficClassMatchStatus = -3;
+                            }
+                            break;
+                    }
+                }
+                // Publish Results
+                Results.Publish("Main Results", new
+                    List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                    new IConvertible[] { this.Name + "_TrafficClassValue", 0, 1, nTrafficClassMatchStatus });
+                trafficClassMatchStatus = EvaluateResult(this.Name + "_TrafficClassValue", 0, 1, nTrafficClassMatchStatus);
+
+                // Test cleanup
+                CommonTestCleanup(communicator, packetCapture);
+            }
+
+            // Update verdict to pass only if PER and RSSI have passed
+            if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
+                (PingReplyReceivedStatus == Keysight.Tap.Verdict.Pass) &&
+                (trafficClassMatchStatus == Keysight.Tap.Verdict.Pass))
+            {
+                UpgradeVerdict(Verdict.Pass);
+            }
+            else
+            {
+                UpgradeVerdict(Verdict.Fail);
+            }
+        }
+
+        protected override void FormatStepName()
+        {
+            try
+            {
+                string newName = GetStepNameFromTypeName(this.TypeName);
+
+                newName = newName + " - " + _TrafficClass.ToString();
+
+                if (this.Name != newName) this.Name = newName;
+            }
+            catch
+            {
+                // Ignore error
+            }
+        }
+
+        private void SetTrafficClassValue()
+        {
+            if (_TrafficClass == TRAFFIC_CLASS.ZERO)
+            {
+                TrafficClassValue = 0;
+            }
+            if (_TrafficClass == TRAFFIC_CLASS.NON_ZERO)
+            {
+                TrafficClassValue = 255;
+            }
+        }
+
+    }
+}
