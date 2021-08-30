@@ -16,7 +16,6 @@ using OpenTap;  // Use Platform infrastructure/core components (log,TestStep def
 using PcapDotNet.Base;
 using PcapDotNet.Core;
 using PcapDotNet.Packets;
-using PcapDotNet.Core.Extensions;
 using PcapDotNet.Packets.Arp;
 using PcapDotNet.Packets.Dns;
 using PcapDotNet.Packets.Ethernet;
@@ -29,63 +28,61 @@ using PcapDotNet.Packets.IpV6;
 using PcapDotNet.Packets.Transport;
 using System.Threading;
 
-
 namespace Tap.Plugins.Anatel_IPv6_Test_update
 {
-    public enum TRAFFIC_CLASS
+    public enum NEXT_HEADER_ZERO_VALIDATE_REPLY
     {
-        ZERO = 0,
-        NON_ZERO = 1,
+        UNRECOGNIZED_NEXT_HEADER = 0,
+        PING_REPLY = 1,
+        UNRECOGNIZED_NEXT_HEADER_AND_PING_REPLY = 2,
+        NO_REPLY
     }
 
-    public enum TRAFFIC_CLASS_VALIDATE_REPLY
-    {
-        ZERO = 0,
-        MATCH_TRANSMITTED_VALUE = 1,
-    }
-
-    [Display("V6LC.1.1.2 Traffic Class", Group: "Anatel_IPv6_Test_update", Description: "Insert description here")]
-    public class V6LC_1_1_2_TrafficClass : V6LC_BaseTest
+    [Display("V6LC.1.2.1 Next Header Zero", Group: "Anatel_IPv6_Test_update", Description: "Insert description here")]
+    public class V6LC_1_2_1_NextHeaderZero : V6LC_BaseTest
     {
         #region Settings
-        private TRAFFIC_CLASS _TrafficClass;
-        [Display(Name: "Traffic Class",
-            Description: "Traffic Class\n" +
-            "\n(Default: -1)",
-            Group: "Packet Setup", Order: 3.0, Collapsed: false)]
-        public TRAFFIC_CLASS TrafficClass { get { return _TrafficClass; } set { _TrafficClass = value; SetTrafficClassValue(); FormatStepName(); } }
+        [Display("Validate Next Header Zero Reply", Group: "Limits", Order: 4.4, Description: "Validate Next Header Zero Reply")]
+        public NEXT_HEADER_ZERO_VALIDATE_REPLY NextHeaderZeroValidate { get; set; }
 
-        [EnabledIf("TrafficClass", TRAFFIC_CLASS.NON_ZERO)]
-        [Display("Traffic Class value", Group: "Packet Setup", Order: 3.1, Description: "Select value for non zero traffic class")]
-        public byte TrafficClassValue { get; set; }
-
-        [Display("Validate Traffic Class value", Group: "Limits", Order: 4.3, Description: "Validate Traffic Class value to Zero or match the transmitted value")]
-        public TRAFFIC_CLASS_VALIDATE_REPLY TrafficClassCompare { get; set; }
         #endregion
 
-        public V6LC_1_1_2_TrafficClass() : base()
+        public V6LC_1_2_1_NextHeaderZero()
+            : base()
         {
             // Show Validate options on GUI
             showValidateEchoRequest = true;
-            showValidateEchoReply = true;
+            showValidateEchoReply = false;
 
             // Validate options for this test
             validateEchoRequest = YesNo.Yes;
             validateEchoReply = YesNo.Yes;
 
-            this.Rules.Add(() => (TrafficClassValue >= 0 && TrafficClassValue <= 255), "Range: 0 to 255", "TrafficClassValue");
+            // Expected Test Case result
+            NextHeaderZeroValidate = NEXT_HEADER_ZERO_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER;
 
-            SetTrafficClassValue();
             FormatStepName();
         }
 
+        /// <summary>
+        /// Procedure:
+        /// 1. TN1 transmits Packet A to the NUT, which has a Hop-by-Hop Options header with a Next
+        /// Header field of zero.
+        /// 2. Observe the packets transmitted by the NUT.
+        /// 
+        /// Observable Results:
+        /// 1. The NUT should send an ICMPv6 Parameter Problem message to TN1. The ICMPv6 Code
+        /// field should be 1 (unrecognized Next Header type encountered). The ICMPv6 Pointer field should be
+        /// 0x28 (offset of the Next Header field of the Hop-by-Hop Options header). 
+        /// 2. The NUT should discard the Echo Request and not send an Echo Reply to TN1.
+        /// </summary>
         public override void Run()
         {
             CommonTestInit();
 
-            Verdict PingRequestReceivedStatus =  Verdict.NotSet;
-            Verdict PingReplyReceivedStatus =  Verdict.NotSet;
-            Verdict trafficClassMatchStatus =  Verdict.NotSet;
+            Verdict PingRequestReceivedStatus = Verdict.NotSet;
+            Verdict PingReplyReceivedStatus = Verdict.NotSet;
+            Verdict ParameterProblemStatus = Verdict.NotSet;
 
             // Retrieve the device list from the local machine
             IList<LivePacketDevice> allDevices = LivePacketDevice.AllLocalMachine;
@@ -121,22 +118,19 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                 // Transmit Packet
                 uintSequenceNumber++;
                 byte bVer = (byte)Byte.Parse("6");
-                byte bTrafficClass = TrafficClassValue;
+                byte bTrafficClass = 0;
                 int nFlowLabel = (int)int.Parse("0");
 
                 String TapFolder = System.IO.Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath);
                 String startTime = PlanRun.StartTime.ToString("yyyy-MM-dd-HH-mm-ss-");
                 String logFileName = TapFolder + @"\Results\" + startTime + this.GetType().Name;
                 // Start Packet Capture
-                PcapCapturePackets packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_" + TrafficClass.ToString());
+                PcapCapturePackets packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName);
                 // Make sure Packet Capture has started before sending ping request
                 TapThread.Sleep(1000);
 
-                // dump TX packet
-                Packet packetA = NewBuildIpV6Packet(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcdefghijklmnopqrstuvwabcdefghi", IpV4Protocol.InternetControlMessageProtocolForIpV6);
-
                 // Ping request
-                communicator.SendPacket(packetA);
+                communicator.SendPacket(NewBuildIpV6PacketGroup2NextHeaderZero(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcdefghijklmnopqrstuvwabcdefghi", IpV4Protocol.IpV6HopByHopOption));
 
                 // Wait
                 Log.Info("Run()->Sleep");
@@ -144,79 +138,130 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
                 do
                 {
                     // Wait until we have received echo and reply
-                    TapThread.Sleep(100);
-                } while ((packetCapture.PacketCounter < 2) && (nRetry++ < 40));
+                    TapThread.Sleep(1000);
+                } while (nRetry++ < 10);
 
                 // Validate Received echo
                 Console.WriteLine("Packets Received: " + packetCapture.PacketCounter);
-                Log.Warning("Numero de Packets esperados - 2");
-                Log.Warning("Packets Recebidos: " + packetCapture.PacketCounter);
 
                 // Terminate capture packets
                 Packet lastPacket = packetCapture.LastPacket;
+                Packet lastPacketParameterProblem = packetCapture.LastPacketParameterProblem;
                 int nPacketCount = packetCapture.PacketCounter;
 
                 // Validate Test Case
-                // Validate Echo reply was received
+                // Validate Echo reply was received0
                 int nEchoReplyReceivedStatus = -1;
                 nEchoReplyReceivedStatus = ValidateEchoReceived(nPacketCount);
-
                 // Publish Results
                 Results.Publish("Main Results", new
                     List<string> { "Test Name", "LSL", "USL", "Measurement" },
                     new IConvertible[] { this.Name + "_Ping_Request_Received", 0, 1, nEchoReplyReceivedStatus });
                 PingRequestReceivedStatus = EvaluateResult(this.Name + "_Ping_Request_Received", 0, 1, nEchoReplyReceivedStatus);
 
-                // Validate Echo Reply was received
-                int nPingReplyReceivedStatus = ValidatePingReplyReceived(nPacketCount, lastPacket);
-                // Publish Results
-                Results.Publish("Main Results", new
-                    List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                    new IConvertible[] { this.Name + "_Ping_Reply_Received", 0, 1, nPingReplyReceivedStatus });
-                PingReplyReceivedStatus = EvaluateResult(this.Name + "_Ping_Reply_Received", 0, 1, nPingReplyReceivedStatus);
-
-                int nTrafficClassMatchStatus = -1;
-                if (nPingReplyReceivedStatus == 0)
+                int nPingReplyReceivedStatus = -1;
+                // Packets received should be:
+                //      1: Only Echo Ping Request received - FAIL
+                //      2: Ping Reply from DUT - FAIL
+                //      2: Parameter Problem from DUT - PASS
+                //      3: Ping Reply from DUT and Parameter Problem - FAIL
+                switch (NextHeaderZeroValidate)
                 {
-                    // validate Traffic Class
-                    PcapParsePacket lastPacketParsed = new PcapParsePacket(lastPacket);
-                    byte ReceivedTrafficClass = lastPacketParsed.GetIPv6TrafficClass();
+                    case NEXT_HEADER_ZERO_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER:
+                        // if last packet is unrecognized next header
+                        if ((PingRequestReceivedStatus == Verdict.Pass) &&
+                            (nPacketCount > 1))
+                        {
+                            nPingReplyReceivedStatus = ValidateParameterProblemReceived(nPacketCount, lastPacketParameterProblem);
+                            // Publish Results
+                            Results.Publish("Main Results", new
+                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                                new IConvertible[] { this.Name + "_ParameterProblemStatus_Received", 0, 1, nPingReplyReceivedStatus });
+                            ParameterProblemStatus = EvaluateResult(this.Name + "_ParameterProblemStatus_Received", 0, 1, nPingReplyReceivedStatus);
 
-                    switch (TrafficClassCompare)
-                    {
-                        case TRAFFIC_CLASS_VALIDATE_REPLY.MATCH_TRANSMITTED_VALUE:
-                            // Case to match received traffic class equal to transmitted traffic class
-                            if (ReceivedTrafficClass == TrafficClassValue)
-                            {
-                                // Received Traffic Class matches Transmitted Traffic Class!
-                                // PASS
-                                nTrafficClassMatchStatus = 0;
-                            }
-                            else
-                            {
-                                nTrafficClassMatchStatus = -2;
-                            }
-                            break;
-                        case TRAFFIC_CLASS_VALIDATE_REPLY.ZERO:
-                            // Case to match received traffic class to zero
-                            if (ReceivedTrafficClass == 0)
-                            {
-                                // Received Traffic Class matches Transmitted Traffic Class!
-                                // PASS
-                                nTrafficClassMatchStatus = 0;
-                            }
-                            else
-                            {
-                                nTrafficClassMatchStatus = -3;
-                            }
-                            break;
-                    }
+                            // Set Ping reply status to pass
+                            PingReplyReceivedStatus = Verdict.Pass;
+                        }
+                        else
+                        {
+                            nPingReplyReceivedStatus = -11;
+                            // Publish Results
+                            Results.Publish("Main Results", new
+                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                                new IConvertible[] { this.Name + "_ParameterProblemStatus_Received", 0, 1, nPingReplyReceivedStatus });
+                            ParameterProblemStatus = EvaluateResult(this.Name + "_ParameterProblemStatus_Received", 0, 1, nPingReplyReceivedStatus);
+
+                            PingReplyReceivedStatus = Verdict.Fail;
+                            ParameterProblemStatus = Verdict.Fail;
+                        }
+                        break;
+                    case NEXT_HEADER_ZERO_VALIDATE_REPLY.PING_REPLY:
+                        // if last packet is ping reply
+                        if ((PingRequestReceivedStatus ==  Verdict.Pass) &&
+                            (nPacketCount > 1))
+                        {
+                            nPingReplyReceivedStatus = ValidatePingReplyReceived(nPacketCount, lastPacket);
+                            // Publish Results
+                            Results.Publish("Main Results", new
+                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                                new IConvertible[] { this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus });
+                            PingReplyReceivedStatus = EvaluateResult(this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus);
+
+                            // Set Ping reply status to pass
+                            ParameterProblemStatus =  Verdict.Pass;
+                        }
+                        else
+                        {
+                            nPingReplyReceivedStatus = -12;
+                            // Publish Results
+                            Results.Publish("Main Results", new
+                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                                new IConvertible[] { this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus });
+                            PingReplyReceivedStatus = EvaluateResult(this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus);
+
+                            PingReplyReceivedStatus =  Verdict.Fail;
+                            ParameterProblemStatus =  Verdict.Fail;
+                        }
+                        break;
+                    case NEXT_HEADER_ZERO_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER_AND_PING_REPLY:
+                        // validate two packets have been received
+                        {
+                            // TODO
+                            // Fail for now
+                            PingReplyReceivedStatus =  Verdict.Fail;
+                            ParameterProblemStatus =  Verdict.Fail;
+                        }
+                        break;
+                    case NEXT_HEADER_ZERO_VALIDATE_REPLY.NO_REPLY:
+                        if ((PingRequestReceivedStatus ==  Verdict.Pass) &&
+                            (nPacketCount <= 1))
+                        {
+                            nPingReplyReceivedStatus = 0;
+                            // Publish Results
+                            Results.Publish("Main Results", new
+                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                                new IConvertible[] { this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus });
+                            PingReplyReceivedStatus = EvaluateResult(this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus);
+
+                            // Only Echo Ping Request has been received
+                            PingReplyReceivedStatus =  Verdict.Pass;
+                            ParameterProblemStatus =  Verdict.Pass;
+                        }
+                        else
+                        {
+                            nPingReplyReceivedStatus = -10;
+                            // Publish Results
+                            Results.Publish("Main Results", new
+                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
+                                new IConvertible[] { this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus });
+                            PingReplyReceivedStatus = EvaluateResult(this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus);
+
+                            // Ping request failed or more than one packet received
+                            PingReplyReceivedStatus =  Verdict.Fail;
+                            ParameterProblemStatus =  Verdict.Fail;
+                        }
+                        break;
                 }
-                // Publish Results
-                Results.Publish("Main Results", new
-                    List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                    new IConvertible[] { this.Name + "_TrafficClassValue", 0, 1, nTrafficClassMatchStatus });
-                trafficClassMatchStatus = EvaluateResult(this.Name + "_TrafficClassValue", 0, 1, nTrafficClassMatchStatus);
 
                 // Test cleanup
                 CommonTestCleanup(communicator, packetCapture);
@@ -225,41 +270,13 @@ namespace Tap.Plugins.Anatel_IPv6_Test_update
             // Update verdict to pass only if PER and RSSI have passed
             if ((PingRequestReceivedStatus ==  Verdict.Pass) &&
                 (PingReplyReceivedStatus ==  Verdict.Pass) &&
-                (trafficClassMatchStatus ==  Verdict.Pass))
+                (ParameterProblemStatus ==  Verdict.Pass))
             {
                 UpgradeVerdict(Verdict.Pass);
             }
             else
             {
                 UpgradeVerdict(Verdict.Fail);
-            }
-        }
-
-        protected override void FormatStepName()
-        {
-            try
-            {
-                string newName = GetStepNameFromTypeName(this.TypeName);
-
-                newName = newName + " - " + _TrafficClass.ToString();
-
-                if (this.Name != newName) this.Name = newName;
-            }
-            catch
-            {
-                // Ignore error
-            }
-        }
-
-        private void SetTrafficClassValue()
-        {
-            if (_TrafficClass == TRAFFIC_CLASS.ZERO)
-            {
-                TrafficClassValue = 0;
-            }
-            if (_TrafficClass == TRAFFIC_CLASS.NON_ZERO)
-            {
-                TrafficClassValue = 255;
             }
         }
 
