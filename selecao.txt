@@ -10,8 +10,9 @@ using System.Linq;
 using System.Text;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 
-using Keysight.Tap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
+using OpenTap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
 using PcapDotNet.Base;
 using PcapDotNet.Core;
 using PcapDotNet.Packets;
@@ -27,22 +28,10 @@ using PcapDotNet.Packets.IpV6;
 using PcapDotNet.Packets.Transport;
 using System.Threading;
 
-namespace Tap.Plugins.Anatel_IPv6_Test
+namespace Tap.Plugins.Anatel_IPv6_Test_update
 {
-    public enum UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY
-    {
-        UNRECOGNIZED_NEXT_HEADER = 0,
-        NO_REPLY
-    }
-
-    public enum PING_REPLY_VALIDATE
-    {
-        PING_REPLY = 0,
-        NO_REPLY
-    }
-
-    [Display("V6LC.1.2.3_UnrecognizedNextHeader", Group: "Anatel_IPv6_Test", Description: "Insert description here")]
-    public class V6LC_1_2_3_UnrecognizedNextHeader : V6LC_BaseTest
+    [Display("V6LC.1.2.4_ExtensionHeaderProcessingOrder", Group: "Anatel_IPv6_Test_update", Description: "Insert description here")]
+    public class V6LC_1_2_4_ExtensionHeaderProcessingOrder : V6LC_BaseTest
     {
         #region Settings
         [Display("Validate Unrecognized Next Header Reply", Group: "Limits - Part A", Order: 4.4, Description: "Validate Unrecognized Next Header Reply")]
@@ -51,21 +40,27 @@ namespace Tap.Plugins.Anatel_IPv6_Test
         [Display("Validate Ping Reply", Group: "Limits - Part A", Order: 4.5, Description: "Validate Ping Reply")]
         public PING_REPLY_VALIDATE PartAPingReplyValidate { get; set; }
 
-        [Display("Unrecognized Next Header Start", Group: "Limits - Part A", Order: 4.6, Description: "Unrecognized Next Header value Start")]
-        public int FirstUnrecognizedHeader { get; set; }
-
-        [Display("Unrecognized Next Header Finish", Group: "Limits - Part A", Order: 4.7, Description: "Unrecognized Next Header value Finish")]
-        public int LastUnrecognizedHeader { get; set; }
-
         [Display("Validate Unrecognized Next Header Reply", Group: "Limits - Part B", Order: 5.4, Description: "Validate Unrecognized Next Header Reply")]
         public UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY PartBUnrecognizedNextHeaderValidate { get; set; }
 
         [Display("Validate Ping Reply", Group: "Limits - Part B", Order: 5.5, Description: "Validate Ping Reply")]
         public PING_REPLY_VALIDATE PartBPingReplyValidate { get; set; }
 
+        [Display("Validate Unrecognized Next Header Reply", Group: "Limits - Part C", Order: 6.4, Description: "Validate Unrecognized Next Header Reply")]
+        public UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY PartCUnrecognizedNextHeaderValidate { get; set; }
+
+        [Display("Validate Ping Reply", Group: "Limits - Part C", Order: 6.5, Description: "Validate Ping Reply")]
+        public PING_REPLY_VALIDATE PartCPingReplyValidate { get; set; }
+
+        [Display("Validate Unrecognized Next Header Reply", Group: "Limits - Part D", Order: 7.4, Description: "Validate Unrecognized Next Header Reply")]
+        public UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY PartDUnrecognizedNextHeaderValidate { get; set; }
+
+        [Display("Validate Ping Reply", Group: "Limits - Part D", Order: 7.5, Description: "Validate Ping Reply")]
+        public PING_REPLY_VALIDATE PartDPingReplyValidate { get; set; }
+
         #endregion
 
-        public V6LC_1_2_3_UnrecognizedNextHeader()
+        public V6LC_1_2_4_ExtensionHeaderProcessingOrder()
             : base()
         {
             // Show Validate options on GUI
@@ -78,57 +73,76 @@ namespace Tap.Plugins.Anatel_IPv6_Test
 
             // Expected Test Case result
             PartAUnrecognizedNextHeaderValidate = UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER;
-            PartAPingReplyValidate = PING_REPLY_VALIDATE.PING_REPLY;
+            PartAPingReplyValidate = PING_REPLY_VALIDATE.NO_REPLY;
             PartBUnrecognizedNextHeaderValidate = UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER;
             PartBPingReplyValidate = PING_REPLY_VALIDATE.NO_REPLY;
-
-            FirstUnrecognizedHeader = 143;
-            LastUnrecognizedHeader = 252;
+            PartCUnrecognizedNextHeaderValidate = UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER;
+            PartCPingReplyValidate = PING_REPLY_VALIDATE.NO_REPLY;
+            PartDUnrecognizedNextHeaderValidate = UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER;
+            PartDPingReplyValidate = PING_REPLY_VALIDATE.NO_REPLY;
 
             FormatStepName();
         }
 
         /// <summary>
         /// Procedure:
-        /// 
-        /// Part A: Unrecognized Next Header in Extension Header (Multiple Values)
-        /// 1. TN1 transmits Packet A, which has a Destination Options header with a Next Header field of 143.
-        /// 2. TN1 transmits a valid Echo Request to the NUT.
-        /// 3. Repeat Steps 1 and 2 with all unrecognized Next Header values between 144 and 252 in Step 1.
-        /// 4. Observe the Packets transmitted by the NUT.
-        /// 
-        /// Part B: Unexpected Next Header in Extension Header
-        /// 5. TN1 transmits Packet B, which has a Destination Options header with a Next Header field of 60.
-        /// The actual extension header that follows is a Fragment header. The Fragment Offset is 0x10E0
-        /// (so that the first 8 bits of this 13 bit field would be 135). The second reserved field is 0x2 and the
-        /// more bit is clear. (If processed as a Destination Options header, this would be processed as
-        /// Option Data Length equals 4.)
-        /// 6. Observe the Packets transmitted by the NUT.
+        /// Part A: Destination Options Header precedes Fragment Header, Error from Destination Options Header
+        /// 1. TN1 transmits Packet A, an Echo Request that has a Hop-by-Hop Options header, Destination
+        /// Options header, and Fragment header, in that order. The Destination Options header has an
+        /// unknown Option Type of 135. The IPv6 header has a Payload Length that is not a multiple of 8
+        /// octets, and the Fragment header has the M-bit set.
+        /// 2. Observe the packets transmitted by the NUT.
+        /// Part B: Destination Options Header precedes Fragment Header, Error from Fragment Header
+        /// 3. TN1 transmits Packet B, an Echo Request that has a Hop-by-Hop Options header, Destination
+        /// Options header, and Fragment header, in that order. The Destination Options header has an
+        /// unknown Option Type of 7. The IPv6 header has a Payload Length that is not a multiple of 8
+        /// octets, and the Fragment header has the M-bit set.
+        /// 4. Observe the packets transmitted by the NUT.
+        /// Part C: Fragment Header precedes Destination Options Header, Error from Fragment Header
+        /// 5. TN1 transmits Packet C, an Echo Request that has a Hop-by-Hop Options header, Fragment
+        /// header, and Destination Options header, in that order. The IPv6 header has a Payload Length that
+        /// is not a multiple of 8 octets, and the Fragment header has the M-bit set. The Destination Options
+        /// header has an unknown Option Type of 135.
+        /// 6. Observe the packets transmitted by the NUT.
+        /// Part D: Fragment Header precedes Destination Options Header, Error from Destination Options Header
+        /// 7. TN1 transmits Packet D, an Echo Request that has a Hop-by-Hop Options header, Fragment
+        /// header, and Destination Options header, in that order. The IPv6 header has a Payload Length that
+        /// is not a multiple of 8 octets, and the Fragment header does not have the M-bit set. The
+        /// Destination Options header has an unknown Option Type of 135.
+        /// 8. Observe the packets transmitted by the NUT.
         /// 
         /// Observable Results:
         /// • Part A
-        /// Step 4: The NUT should send an ICMPv6 Parameter Problem message to TN1. The
-        /// ICMPv6 Code field should be 1 (unrecognized Next Header type encountered). The ICMPv6
-        /// Pointer field should be 0x28 (offset of the Next Header field). The NUT should send an Echo
-        /// Reply in response to the Echo Request sent by TN1 in Step 2.
+        /// Step 2: The NUT must send an ICMPv6 Parameter Problem message to TN1. The Code
+        /// field must be 2 (unrecognized IPv6 Option encountered). The Pointer field must be 0x32
+        /// (offset of the Option type field in the Destination Options header). The NUT must discard
+        /// the Echo Request from TN1.
         /// • Part B
-        /// Step 6: From the Next Header field in the Destination Options header, the NUT expects the
-        /// Fragment header to be a Destination Options header. Thus, the Fragment Offset would be
-        /// interpreted as if it were an Option Type. The NUT should send an ICMPv6 Parameter
-        /// Problem message to TN1. The Code field should be 2 (unrecognized IPv6 Option
-        /// encountered). The Pointer field should be 0x32 (offset of the Fragment Offset in the
-        /// Fragment header). The NUT should discard Packet B and should not send an Echo Reply to
+        /// Step 4: The NUT should send an ICMPv6 Parameter Problem message to TN1. The Code
+        /// field should be 0 (erroneous header field encountered). The Pointer field should be 0x04
+        /// (offset of the Payload Length field in the IPv6 header). The NUT must discard the Echo
+        /// Request from TN1.
+        /// • Part C
+        /// Step 6: NUT should send an ICMPv6 Parameter Problem message to TN1. The Code field
+        /// should be 0 (erroneous header field encountered). The Pointer field should be 0x04 (offset of
+        /// the Payload Length field in the IPv6 header). The NUT must discard the Echo Request from
         /// TN1.
+        /// • Part D
+        /// Step 8: The NUT must send an ICMPv6 Parameter Problem message to TN1. The Code
+        /// field must be 2 (unrecognized IPv6 Option encountered). If the IPv6 Parameter Problem
+        /// message includes a Fragment Header, the Pointer field must be 0x3A (offset of the Option
+        /// type field in the Destination Options header). If the IPv6 Parameter Problem message does
+        /// not include a Fragment Header, the Pointer field must be 0x32 (offset of the Option type field
+        /// in the Destination Options header). The NUT must discard the Echo Request from TN1.        
         /// </summary>
         public override void Run()
         {
             CommonTestInit();
 
-            Verdict PingRequestReceivedStatus = Keysight.Tap.Verdict.NotSet;
-            Verdict PingReplyReceivedStatus = Keysight.Tap.Verdict.NotSet;
-            Verdict PingReplyReceivedStatus2 = Keysight.Tap.Verdict.NotSet;
-            Verdict ParameterProblemStatus = Keysight.Tap.Verdict.NotSet;
-            Verdict OverallStatus = Keysight.Tap.Verdict.Pass;
+            Verdict PingRequestReceivedStatus = Verdict.NotSet;
+            Verdict PingReplyReceivedStatus = Verdict.NotSet;
+            Verdict ExtensionHeaderStatus = Verdict.NotSet;
+            Verdict OverallStatus = Verdict.Pass;
 
             // Retrieve the device list from the local machine
             IList<LivePacketDevice> allDevices = LivePacketDevice.AllLocalMachine;
@@ -175,22 +189,60 @@ namespace Tap.Plugins.Anatel_IPv6_Test
                 String startTime = PlanRun.StartTime.ToString("yyyy-MM-dd-HH-mm-ss-");
                 String logFileName = TapFolder + @"\Results\" + startTime + this.GetType().Name;
                 // Start Packet Capture
-                PcapCapturePackets packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartA");
-                // Make sure Packet Capture has started before sending ping request
-                Thread.Sleep(1000);
+                PcapCapturePackets packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartA"); ;
 
-                for (int nUnrecognizedNextHeader = FirstUnrecognizedHeader; nUnrecognizedNextHeader <= LastUnrecognizedHeader; nUnrecognizedNextHeader++)
+                // Build Test Packets
+                Packet packetA = NewBuildIpV6PacketGroup2ExtensionHeaderPacketA(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcde");
+                Packet packetB = NewBuildIpV6PacketGroup2ExtensionHeaderPacketB(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcde");
+                Packet packetC = NewBuildIpV6PacketGroup2ExtensionHeaderPacketC(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcde");
+                Packet packetD = NewBuildIpV6PacketGroup2ExtensionHeaderPacketD(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcde");
+
+                for (int iTestCase = 0; iTestCase < 4; iTestCase++)
                 {
+                    // Start packet capture
+                    switch (iTestCase)
+                    {
+                        case 0:
+                            // Initialized to PartA when we declared the packetcapture
+                            break;
+                        case 1:
+                            TapThread.Sleep(100);
+                            packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartB");
+                            break;
+                        case 2:
+                            TapThread.Sleep(100);
+                            packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartC");
+                            break;
+                        case 3:
+                            TapThread.Sleep(100);
+                            packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartD");
+                            break;
+                    }
+
+                    // Make sure Packet Capture has started before sending ping request
+                    TapThread.Sleep(1000);
+
                     // Reset Packet counter
                     packetCapture.PacketCounter = 0;
                     packetCapture.LastPacket = null;
                     packetCapture.LastPacketParameterProblem = null;
 
-                    // Packet A
-                    communicator.SendPacket(NewBuildIpV6PacketGroup2UnrecognizedNextHeaderPacketA(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcdefghijklmnopqrstuvwabcdefghi", (IpV4Protocol)nUnrecognizedNextHeader));
-
-                    // Valid Ping request
-                    communicator.SendPacket(NewBuildIpV6Packet(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcdefghijklmnopqrstuvwabcdefghi", IpV4Protocol.InternetControlMessageProtocolForIpV6));
+                    // Ping request
+                    switch (iTestCase)
+                    {
+                        case 0:
+                            communicator.SendPacket(packetA);
+                            break;
+                        case 1:
+                            communicator.SendPacket(packetB);
+                            break;
+                        case 2:
+                            communicator.SendPacket(packetC);
+                            break;
+                        case 3:
+                            communicator.SendPacket(packetD);
+                            break;
+                    }
 
                     // Wait
                     Log.Info("Run()->Sleep");
@@ -198,11 +250,13 @@ namespace Tap.Plugins.Anatel_IPv6_Test
                     do
                     {
                         // Wait until we have received echo and reply
-                        Thread.Sleep(100);
-                    } while ((packetCapture.PacketCounter < 4) && (nRetry++ < 10));
+                        TapThread.Sleep(100);
+                    } while ((packetCapture.PacketCounter < 3) && (nRetry++ < 40));
 
                     // Validate Received echo
                     Console.WriteLine("Packets Received: " + packetCapture.PacketCounter);
+                    Log.Warning("Numero de Packets esperados - 3");
+                    Log.Warning("Packets Recebidos: " + packetCapture.PacketCounter);
 
                     // Terminate capture packets
                     Packet lastPacket = packetCapture.LastPacket;
@@ -221,189 +275,60 @@ namespace Tap.Plugins.Anatel_IPv6_Test
                         new IConvertible[] { this.Name + "_Ping_Request_Received", 0, 1, nEchoReplyReceivedStatus });
                     PingRequestReceivedStatus = EvaluateResult(this.Name + "_Ping_Request_Received", 0, 1, nEchoReplyReceivedStatus);
 
-                    // Validate ICMPv6 Parameter Problem
-                    EvaluateParameterProblem(PartAUnrecognizedNextHeaderValidate, PingRequestReceivedStatus, nPacketCount, ref ParameterProblemStatus, lastPacketParameterProblem);
+                    // Reduce number of packets, since we received ping reply
+                    int nPackets = nPacketCount - 1;
+                    switch (iTestCase)
+                    {
+                        case 0:
+                            // Validate ICMPv6 Parameter Problem
+                            EvaluateParameterProblem(PartAUnrecognizedNextHeaderValidate, PingRequestReceivedStatus, nPacketCount, ref ExtensionHeaderStatus, lastPacketParameterProblem);
 
-                    // Validate Ping Reply
-                    EvaluatePingReply(PartAPingReplyValidate, PingRequestReceivedStatus, nPacketCount, ref PingReplyReceivedStatus, lastPacket);
+                            // Validate Ping Reply
+                            EvaluatePingReply(PartAPingReplyValidate, PingRequestReceivedStatus, nPackets, ref PingReplyReceivedStatus, lastPacket);
+                            break;
+                        case 1:
+                            // Validate ICMPv6 Parameter Problem
+                            EvaluateParameterProblem(PartBUnrecognizedNextHeaderValidate, PingRequestReceivedStatus, nPacketCount, ref ExtensionHeaderStatus, lastPacketParameterProblem);
+
+                            // Validate Ping Reply
+                            EvaluatePingReply(PartBPingReplyValidate, PingRequestReceivedStatus, nPackets, ref PingReplyReceivedStatus, lastPacket);
+                            break;
+                        case 2:
+                            // Validate ICMPv6 Parameter Problem
+                            EvaluateParameterProblem(PartCUnrecognizedNextHeaderValidate, PingRequestReceivedStatus, nPacketCount, ref ExtensionHeaderStatus, lastPacketParameterProblem);
+
+                            // Validate Ping Reply
+                            EvaluatePingReply(PartCPingReplyValidate, PingRequestReceivedStatus, nPackets, ref PingReplyReceivedStatus, lastPacket);
+                            break;
+                        case 3:
+                            // Validate ICMPv6 Parameter Problem
+                            EvaluateParameterProblem(PartDUnrecognizedNextHeaderValidate, PingRequestReceivedStatus, nPacketCount, ref ExtensionHeaderStatus, lastPacketParameterProblem);
+
+                            // Validate Ping Reply
+                            EvaluatePingReply(PartDPingReplyValidate, PingRequestReceivedStatus, nPackets, ref PingReplyReceivedStatus, lastPacket);
+                            break;
+                    }
 
                     // Update verdict to pass only if passed
-                    if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                        (PingReplyReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                        (ParameterProblemStatus == Keysight.Tap.Verdict.Pass))
+                    if ((PingRequestReceivedStatus == Verdict.Pass) &&
+                        (PingReplyReceivedStatus == Verdict.Pass) &&
+                        (ExtensionHeaderStatus == Verdict.Pass))
                     {
 
                     }
                     else
                     {
                         // Update status to fail if the test failed
-                        OverallStatus = Keysight.Tap.Verdict.Fail;
+                        OverallStatus = Verdict.Fail;
                     }
 
+                    // Test cleanup
+                    CommonTestCleanup(communicator, packetCapture);
                 }
-
-                // Test cleanup
-                CommonTestCleanup(communicator, packetCapture);
-
-                // ****************************************************************************
-                // ***************************** PART B ***************************************
-                // ****************************************************************************
-                // NUT must transmit Receive Parameter Problem
-                // NUT must discard echo request and not reply back
-                // ****************************************************************************
-                // Reset Packet counter
-                Thread.Sleep(100);
-                packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartB");
-                packetCapture.PacketCounter = 0;
-                packetCapture.LastPacket = null;
-                packetCapture.LastPacketParameterProblem = null;
-
-                // Ping request
-                communicator.SendPacket(NewBuildIpV6PacketGroup2UnrecognizedNextHeaderPacketB(uintIdentifier, uintSequenceNumber, bVer, bTrafficClass, nFlowLabel, "abcdefghijklmnopqrstuvwabcdefghi"));
-
-                // Wait
-                Log.Info("Run()->Sleep");
-                int nRetry2 = 0;
-                do
-                {
-                    // Wait until we have received echo and reply
-                    Thread.Sleep(100);
-                } while ((packetCapture.PacketCounter < 3) && (nRetry2++ < 40));
-
-                // Validate Received echo
-                Console.WriteLine("Packets Received: " + packetCapture.PacketCounter);
-
-                // Terminate capture packets
-                Packet lastPacket2 = packetCapture.LastPacket;
-                Packet lastPacketParameterProblem2 = packetCapture.LastPacketParameterProblem;
-                int nPacketCount2 = packetCapture.PacketCounter;
-                //packetCapture.StopPacketCapture();
-                //packetCapture = null;
-
-
-                // Validate ICMPv6 Parameter Problem
-                int nParameterProblemStatus2 = -1;
-                switch (PartBUnrecognizedNextHeaderValidate)
-                {
-                    case UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY.UNRECOGNIZED_NEXT_HEADER:
-                        // if last packet is unrecognized next header
-                        if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                            (nPacketCount2 > 1))
-                        {
-                            nParameterProblemStatus2 = ValidateParameterProblemReceived(nPacketCount2, lastPacketParameterProblem2);
-                            // Publish Results
-                            Results.Publish("Main Results", new
-                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                                new IConvertible[] { this.Name + "_ParameterProblemStatus_Received", 0, 1, nParameterProblemStatus2 });
-                            ParameterProblemStatus = EvaluateResult(this.Name + "_ParameterProblemStatus_Received", 0, 1, nParameterProblemStatus2);
-                        }
-                        else
-                        {
-                            nParameterProblemStatus2 = -11;
-                            // Publish Results
-                            Results.Publish("Main Results", new
-                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                                new IConvertible[] { this.Name + "_ParameterProblemStatus_Received", 0, 1, nParameterProblemStatus2 });
-                            ParameterProblemStatus = EvaluateResult(this.Name + "_ParameterProblemStatus_Received", 0, 1, nParameterProblemStatus2);
-                        }
-                        break;
-                    case UNRECOGNIZED_NEXT_HEADER_VALIDATE_REPLY.NO_REPLY:
-                        // Validate lastPacketParameterProblem is null
-                        // this means that the pcap library didn't find any parameter problem packets
-                        if (lastPacketParameterProblem2 == null)
-                        {
-                            // PASS
-                            nParameterProblemStatus2 = 0;
-                            // Publish Results
-                            Results.Publish("Main Results", new
-                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                                new IConvertible[] { this.Name + "_ParameterProblemStatus_Received", 0, 1, nParameterProblemStatus2 });
-                            ParameterProblemStatus = EvaluateResult(this.Name + "_ParameterProblemStatus_Received", 0, 1, nParameterProblemStatus2);
-                        }
-                        else
-                        {
-                            // FAil
-                            nParameterProblemStatus2 = -12;
-                            // Publish Results
-                            Results.Publish("Main Results", new
-                                List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                                new IConvertible[] { this.Name + "_ParameterProblemStatus_Received", 0, 1, nParameterProblemStatus2 });
-                            ParameterProblemStatus = EvaluateResult(this.Name + "_ParameterProblemStatus_Received", 0, 1, nParameterProblemStatus2);
-                        }
-                        break;
-                }
-
-                // Validate Ping Reply
-
-                //int nPingReplyReceivedStatus2 = -1;
-                EvaluatePingReply(PartBPingReplyValidate, Keysight.Tap.Verdict.Pass, nPacketCount2, ref PingReplyReceivedStatus2, lastPacket2);
-                //switch (PartBPingReplyValidate)
-                //{
-                //    case PING_REPLY_VALIDATE.PING_REPLY:
-                //        // if last packet is ping reply
-                //        if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                //            (nPacketCount2 > 1))
-                //        {
-                //            nPingReplyReceivedStatus2 = ValidatePingReplyReceived(nPacketCount2, lastPacket2);
-                //            // Publish Results
-                //            Results.Publish("Main Results", new
-                //                List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                //                new IConvertible[] { this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus2 });
-                //            PingReplyReceivedStatus = EvaluateResult(this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus2);
-                //        }
-                //        else
-                //        {
-                //            nPingReplyReceivedStatus2 = -12;
-                //            // Publish Results
-                //            Results.Publish("Main Results", new
-                //                List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                //                new IConvertible[] { this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus2 });
-                //            PingReplyReceivedStatus = EvaluateResult(this.Name + "nPingReplyReceivedStatus", 0, 1, nPingReplyReceivedStatus2);
-                //        }
-                //        break;
-                //    case PING_REPLY_VALIDATE.NO_REPLY:
-                //        if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                //            (nPacketCount2 <= 1))
-                //        {
-                //            nPingReplyReceivedStatus2 = 0;
-                //            // Publish Results
-                //            Results.Publish("Main Results", new
-                //                List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                //                new IConvertible[] { this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus2 });
-                //            PingReplyReceivedStatus = EvaluateResult(this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus2);
-                //        }
-                //        else
-                //        {
-                //            nPingReplyReceivedStatus2 = -10;
-                //            // Publish Results
-                //            Results.Publish("Main Results", new
-                //                List<string> { "Test Name", "LSL", "USL", "Measurement" },
-                //                new IConvertible[] { this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus2 });
-                //            PingReplyReceivedStatus = EvaluateResult(this.Name + "NoReply", 0, 1, nPingReplyReceivedStatus2);
-                //        }
-                //        break;
-                //}
-
-                // Update verdict to pass only if passed
-                if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                    (PingReplyReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                    (PingReplyReceivedStatus2 == Keysight.Tap.Verdict.Pass) &&
-                    (ParameterProblemStatus == Keysight.Tap.Verdict.Pass))
-                {
-
-                }
-                else
-                {
-                    // Update status to fail if the test failed
-                    OverallStatus = Keysight.Tap.Verdict.Fail;
-                }
-
-                // Test cleanup
-                CommonTestCleanup(communicator, packetCapture);
             }
 
             // Update verdict to pass only if PER and RSSI have passed
-            if (OverallStatus == Keysight.Tap.Verdict.Pass)
+            if (OverallStatus == Verdict.Pass)
             {
                 UpgradeVerdict(Verdict.Pass);
             }
