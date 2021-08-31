@@ -1,4 +1,4 @@
-        protected Packet NewBuildIpV6PacketGroup2ExtensionHeaderPacketA(UInt32 uiIdentifier, UInt32 uiSequence, byte bVersion, byte bTrafficClass, int nFlowLabel, String strPayload)
+        protected Packet NewBuildIpV6Packet(UInt32 uiIdentifier, UInt32 uiSequence, byte bVersion, byte bTrafficClass, int nFlowLabel, String strPayload, IpV4Protocol nextHeader)
         {
             EthernetLayer ethernetLayer =
                 new EthernetLayer
@@ -21,47 +21,15 @@
                     CurrentDestination = new IpV6Address(dutIPv6Address),    //"2001:5:5604:0347:0000:0000:0000:5"),   // DUT's IPV6 assigned from UXM
                     FlowLabel = nFlowLabel,
                     HopLimit = 128,
-                    NextHeader = IpV4Protocol.IpV6HopByHopOption,    //.IpV6HopByHopOption,
+                    NextHeader = nextHeader,
                     CustomVersion = bVersion,
                     TrafficClass = bTrafficClass,
                 };
 
-            IpV6OptionPadN optpadN = new IpV6OptionPadN(4);
-
-            IpV6Options ipv6options = new IpV6Options(optpadN);
-
-            IpV6ExtensionHeaderHopByHopOptions ipv6HopByHopExtensionHeader =
-                new IpV6ExtensionHeaderHopByHopOptions(IpV4Protocol.IpV6Opts, ipv6options);
-
-
-            // Define IpV6OptionUnknown
-            byte[] buffer = { 0x00, 0x00, 0x00, 0x00 };
-            DataSegment dataSegment = new DataSegment(buffer);
-            IpV6OptionUnknown optUnknown = new IpV6OptionUnknown((IpV6OptionType)135, dataSegment);
-
-            IpV6Options ipv6options2 = new IpV6Options(optUnknown);
-
-            IpV6ExtensionHeaderDestinationOptions ipv6DestinationOptions =
-                new IpV6ExtensionHeaderDestinationOptions(IpV4Protocol.FragmentHeaderForIpV6, ipv6options2);
-
-
-            // Fragment Header
-            IpV6ExtensionHeaderFragmentData ipv6ExtensionHeaderFragment =
-                new IpV6ExtensionHeaderFragmentData(IpV4Protocol.InternetControlMessageProtocolForIpV6, 0x0000, true, 0x0, 0x00);
-
-
-            // Test Case
-            IpV6ExtensionHeaders ipv6ExtHeads = new IpV6ExtensionHeaders(ipv6HopByHopExtensionHeader, ipv6DestinationOptions, ipv6ExtensionHeaderFragment);
-            //IpV6ExtensionHeaders ipv6ExtHeads = new IpV6ExtensionHeaders(ipv6DestinationOptions);    //, ipv6ExtensionHeaderFragment);
-
-            ipV6Layer.ExtensionHeaders = ipv6ExtHeads;
-
-
-
-
             //ipV6Layer.CustomVersion = 0x04;
             uint uintLayerVariable;
             uintLayerVariable = (uiIdentifier << 16) | uiSequence;
+
 
             IcmpIpv6UnknownLayer icmpIpv6Layer = new IcmpIpv6UnknownLayer();
             icmpIpv6Layer.LayerMessageType = 0x80;
@@ -70,11 +38,9 @@
             icmpIpv6Layer.LayerVariable = uintLayerVariable;
             icmpIpv6Layer.Payload = new Datagram(Encoding.ASCII.GetBytes(strPayload));
             Console.WriteLine("Checksum: " + icmpIpv6Layer.Checksum);
-            Log.Info("Checksum: " + icmpIpv6Layer.Checksum);
 
             PacketBuilder builder = new PacketBuilder(ethernetLayer, ipV6Layer, icmpIpv6Layer);
             Console.WriteLine("Checksum: " + icmpIpv6Layer.Checksum);
-            Log.Info("Checksum: " + icmpIpv6Layer.Checksum);
 
             Packet newPacket = builder.Build(DateTime.Now);
 
