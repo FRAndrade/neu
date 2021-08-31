@@ -1,9 +1,10 @@
-        protected Packet NewBuildIpV6PacketGroup2ExtensionHeaderPacketB(UInt32 uiIdentifier, UInt32 uiSequence, byte bVersion, byte bTrafficClass, int nFlowLabel, String strPayload)
+        protected Packet NewBuildIpV6PacketGroup2ExtensionHeaderPacketA(UInt32 uiIdentifier, UInt32 uiSequence, byte bVersion, byte bTrafficClass, int nFlowLabel, String strPayload)
         {
             EthernetLayer ethernetLayer =
                 new EthernetLayer
                 {
                     Source = new MacAddress(sourceMAC), //"00:05:1b:a6:a1:22"),
+                    //Destination = new MacAddress("02:00:55:34:03:08"),    // Joe's UXM
                     Destination = new MacAddress(destinationMAC),   //"02:00:55:34:02:43"),      // Tracy's UXM
                     EtherType = EthernetType.IpV6,
                 };
@@ -13,7 +14,10 @@
             IpV6Layer ipV6Layer =
                 new IpV6Layer
                 {
+                    //Source = new IpV6Address("2601:245:4002:30a0:0cfd:a476:6039:1cdc"),
+                    //Source = new IpV6Address("2001:0:5534:308:c94a:34d0:92da:39eb"),  // IPv6 assigned to Laptop from Joe's UXM router
                     Source = new IpV6Address(sourceIPv6Address),    //"2001:0:5534:243:3867:41f:7f2a:e625"),    // IPV6 assigned to Laptop from Tracy's UXM router
+                    //CurrentDestination = new IpV6Address("2001:5:5534:308:0000:0000:0000:5"),   // DUT's IPV6 assigned from UXM
                     CurrentDestination = new IpV6Address(dutIPv6Address),    //"2001:5:5604:0347:0000:0000:0000:5"),   // DUT's IPV6 assigned from UXM
                     FlowLabel = nFlowLabel,
                     HopLimit = 128,
@@ -26,14 +30,14 @@
 
             IpV6Options ipv6options = new IpV6Options(optpadN);
 
-            IpV6ExtensionHeaderHopByHopOptions ipv6ExtensionHeader =
+            IpV6ExtensionHeaderHopByHopOptions ipv6HopByHopExtensionHeader =
                 new IpV6ExtensionHeaderHopByHopOptions(IpV4Protocol.IpV6Opts, ipv6options);
 
 
             // Define IpV6OptionUnknown
             byte[] buffer = { 0x00, 0x00, 0x00, 0x00 };
             DataSegment dataSegment = new DataSegment(buffer);
-            IpV6OptionUnknown optUnknown = new IpV6OptionUnknown((IpV6OptionType)7, dataSegment);
+            IpV6OptionUnknown optUnknown = new IpV6OptionUnknown((IpV6OptionType)135, dataSegment);
 
             IpV6Options ipv6options2 = new IpV6Options(optUnknown);
 
@@ -47,7 +51,7 @@
 
 
             // Test Case
-            IpV6ExtensionHeaders ipv6ExtHeads = new IpV6ExtensionHeaders(ipv6ExtensionHeader, ipv6DestinationOptions, ipv6ExtensionHeaderFragment);
+            IpV6ExtensionHeaders ipv6ExtHeads = new IpV6ExtensionHeaders(ipv6HopByHopExtensionHeader, ipv6DestinationOptions, ipv6ExtensionHeaderFragment);
             //IpV6ExtensionHeaders ipv6ExtHeads = new IpV6ExtensionHeaders(ipv6DestinationOptions);    //, ipv6ExtensionHeaderFragment);
 
             ipV6Layer.ExtensionHeaders = ipv6ExtHeads;
