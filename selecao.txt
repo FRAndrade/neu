@@ -10,8 +10,9 @@ using System.Linq;
 using System.Text;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 
-using Keysight.Tap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
+using OpenTap;  // Use Platform infrastructure/core components (log,TestStep definition, etc)
 using PcapDotNet.Base;
 using PcapDotNet.Core;
 using PcapDotNet.Packets;
@@ -27,9 +28,9 @@ using PcapDotNet.Packets.IpV6;
 using PcapDotNet.Packets.Transport;
 using System.Threading;
 
-namespace Tap.Plugins.Anatel_IPv6_Test
+namespace Tap.Plugins.Anatel_IPv6_Test_update
 {
-    [Display("V6LC.1.2.4_ExtensionHeaderProcessingOrder", Group: "Anatel_IPv6_Test", Description: "Insert description here")]
+    [Display("V6LC.1.2.4_ExtensionHeaderProcessingOrder", Group: "Anatel_IPv6_Test_update", Description: "Insert description here")]
     public class V6LC_1_2_4_ExtensionHeaderProcessingOrder : V6LC_BaseTest
     {
         #region Settings
@@ -138,10 +139,10 @@ namespace Tap.Plugins.Anatel_IPv6_Test
         {
             CommonTestInit();
 
-            Verdict PingRequestReceivedStatus = Keysight.Tap.Verdict.NotSet;
-            Verdict PingReplyReceivedStatus = Keysight.Tap.Verdict.NotSet;
-            Verdict ExtensionHeaderStatus = Keysight.Tap.Verdict.NotSet;
-            Verdict OverallStatus = Keysight.Tap.Verdict.Pass;
+            Verdict PingRequestReceivedStatus = Verdict.NotSet;
+            Verdict PingReplyReceivedStatus = Verdict.NotSet;
+            Verdict ExtensionHeaderStatus = Verdict.NotSet;
+            Verdict OverallStatus = Verdict.Pass;
 
             // Retrieve the device list from the local machine
             IList<LivePacketDevice> allDevices = LivePacketDevice.AllLocalMachine;
@@ -205,21 +206,21 @@ namespace Tap.Plugins.Anatel_IPv6_Test
                             // Initialized to PartA when we declared the packetcapture
                             break;
                         case 1:
-                            Thread.Sleep(100);
+                            TapThread.Sleep(200);
                             packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartB");
                             break;
                         case 2:
-                            Thread.Sleep(100);
+                            TapThread.Sleep(200);
                             packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartC");
                             break;
                         case 3:
-                            Thread.Sleep(100);
+                            TapThread.Sleep(200);
                             packetCapture = new PcapCapturePackets(Log, nicId, sourceMAC, destinationMAC, sourceIPv6Address, dutIPv6Address, logFileName + "_PartD");
                             break;
                     }
 
                     // Make sure Packet Capture has started before sending ping request
-                    Thread.Sleep(1000);
+                    TapThread.Sleep(2000);
 
                     // Reset Packet counter
                     packetCapture.PacketCounter = 0;
@@ -249,11 +250,13 @@ namespace Tap.Plugins.Anatel_IPv6_Test
                     do
                     {
                         // Wait until we have received echo and reply
-                        Thread.Sleep(100);
+                        TapThread.Sleep(200);
                     } while ((packetCapture.PacketCounter < 3) && (nRetry++ < 40));
 
                     // Validate Received echo
                     Console.WriteLine("Packets Received: " + packetCapture.PacketCounter);
+                    Log.Warning("Numero de Packets esperados - 3");
+                    Log.Warning("Packets Recebidos: " + packetCapture.PacketCounter);
 
                     // Terminate capture packets
                     Packet lastPacket = packetCapture.LastPacket;
@@ -307,16 +310,16 @@ namespace Tap.Plugins.Anatel_IPv6_Test
                     }
 
                     // Update verdict to pass only if passed
-                    if ((PingRequestReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                        (PingReplyReceivedStatus == Keysight.Tap.Verdict.Pass) &&
-                        (ExtensionHeaderStatus == Keysight.Tap.Verdict.Pass))
+                    if ((PingRequestReceivedStatus == Verdict.Pass) &&
+                        (PingReplyReceivedStatus == Verdict.Pass) &&
+                        (ExtensionHeaderStatus == Verdict.Pass))
                     {
 
                     }
                     else
                     {
                         // Update status to fail if the test failed
-                        OverallStatus = Keysight.Tap.Verdict.Fail;
+                        OverallStatus = Verdict.Fail;
                     }
 
                     // Test cleanup
@@ -325,7 +328,7 @@ namespace Tap.Plugins.Anatel_IPv6_Test
             }
 
             // Update verdict to pass only if PER and RSSI have passed
-            if (OverallStatus == Keysight.Tap.Verdict.Pass)
+            if (OverallStatus == Verdict.Pass)
             {
                 UpgradeVerdict(Verdict.Pass);
             }
