@@ -1,4 +1,4 @@
-        protected Packet NewBuildIpV6PacketGroup2ExtensionHeaderPacketA(UInt32 uiIdentifier, UInt32 uiSequence, byte bVersion, byte bTrafficClass, int nFlowLabel, String strPayload)
+protected Packet NewBuildIpV6PacketGroup2ExtensionHeaderPacketA(UInt32 uiIdentifier, UInt32 uiSequence, byte bVersion, byte bTrafficClass, int nFlowLabel, String strPayload)
         {
             EthernetLayer ethernetLayer =
                 new EthernetLayer
@@ -25,37 +25,37 @@
                     CustomVersion = bVersion,
                     TrafficClass = bTrafficClass,
                 };
-            Log.Warning("ok-1");
+
             IpV6OptionPadN optpadN = new IpV6OptionPadN(4);
-            Log.Warning("ok-2");
+
             IpV6Options ipv6options = new IpV6Options(optpadN);
 
             IpV6ExtensionHeaderHopByHopOptions ipv6HopByHopExtensionHeader =
                 new IpV6ExtensionHeaderHopByHopOptions(IpV4Protocol.IpV6Opts, ipv6options);
-            Log.Warning("ok-3");
+
 
             // Define IpV6OptionUnknown
-            byte[] buffer = { 0x00, 0x00, 0x00, 0x00 };
+            byte[] buffer = {0x00, 0x00, 0x00, 0x00};
             DataSegment dataSegment = new DataSegment(buffer);
             IpV6OptionUnknown optUnknown = new IpV6OptionUnknown((IpV6OptionType)135, dataSegment);
-            Log.Warning("ok-4");
+
             IpV6Options ipv6options2 = new IpV6Options(optUnknown);
-            Log.Warning("ok-5");
+
             IpV6ExtensionHeaderDestinationOptions ipv6DestinationOptions =
                 new IpV6ExtensionHeaderDestinationOptions(IpV4Protocol.FragmentHeaderForIpV6, ipv6options2);
-            Log.Warning("ok-6");
+
 
             // Fragment Header
             IpV6ExtensionHeaderFragmentData ipv6ExtensionHeaderFragment =
                 new IpV6ExtensionHeaderFragmentData(IpV4Protocol.InternetControlMessageProtocolForIpV6, 0x0000, true, 0x0, 0x00);
-            Log.Warning("ok-7");
+
 
             // Test Case
             IpV6ExtensionHeaders ipv6ExtHeads = new IpV6ExtensionHeaders(ipv6HopByHopExtensionHeader, ipv6DestinationOptions, ipv6ExtensionHeaderFragment);
             //IpV6ExtensionHeaders ipv6ExtHeads = new IpV6ExtensionHeaders(ipv6DestinationOptions);    //, ipv6ExtensionHeaderFragment);
-            Log.Warning("ok-8");
+
             ipV6Layer.ExtensionHeaders = ipv6ExtHeads;
-            Log.Warning("ok-9");
+
 
 
 
@@ -77,6 +77,6 @@
             Log.Info("Checksum: " + icmpIpv6Layer.Checksum);
 
             Packet newPacket = builder.Build(DateTime.Now);
-            Log.Warning("ok-10");
+
             return newPacket;
         }
